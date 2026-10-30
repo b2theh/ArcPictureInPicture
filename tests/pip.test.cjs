@@ -209,9 +209,9 @@ test('each swipe direction selects the corresponding corner while preserving the
     const p = player({ left, top });
     assert.equal(p.wheel(dx, dy).prevented, true);
     assert.equal(p.moves.length, 0);
-    p.advance(140);
+    p.advance(300);
     assert.notDeepEqual(p.moves.at(-1), [x, y]);
-    p.advance(140);
+    p.advance(300);
     assert.deepEqual(p.moves.at(-1), [x, y]);
     assert.equal(p.frames.size, 0);
   }
@@ -220,7 +220,7 @@ test('each swipe direction selects the corresponding corner while preserving the
 test('a swipe from the center uses the dominant direction and nearest perpendicular side', () => {
   const p = player({ left: 700, top: 400 });
   p.wheel(8, 40);
-  p.advance(280);
+  p.advance(600);
   assert.deepEqual(p.moves.at(-1), [1024, 16]);
 });
 
@@ -231,26 +231,26 @@ test('small touches accumulate to a threshold; a momentum stream triggers one fl
   assert.equal(p.frames.size, 0);
   p.wheel(0, 5);
   assert.equal(p.frames.size, 1);
-  p.advance(280);
+  p.advance(600);
   // A reversed inertia tail must not send the window back down.
   p.wheel(0, -100);
-  p.advance(280);
+  p.advance(600);
   assert.deepEqual(p.moves, [[1024, 16]]);
   assert.equal(p.timers.size, 1);
   p.settle();
   p.wheel(0, -40);
-  p.advance(280);
+  p.advance(600);
   assert.deepEqual(p.moves.at(-1), [1024, 659]);
 });
 
 test('wheel line/page units and monitors with negative origins choose valid corners', () => {
   const p = player({ left: -416, top: -241, screenLeft: -1440, screenTop: -900 });
   p.wheel(2, 0, { deltaMode: 1 });
-  p.advance(280);
+  p.advance(600);
   assert.deepEqual(p.moves.at(-1), [-1424, -241]);
   p.settle();
   p.wheel(0, 1, { deltaMode: 2 });
-  p.advance(280);
+  p.advance(600);
   assert.deepEqual(p.moves.at(-1), [-1424, -884]);
 });
 
@@ -274,7 +274,7 @@ test('grabbing an animating window stops the flight and continues a free drag', 
   assert.equal(p.timers.size, 0);
   p.fire('pointermove', -200, 100);
   p.fire('pointerup', -200, 100);
-  p.advance(280);
+  p.advance(600);
   assert.deepEqual(p.moves.at(-1), [824, y + 100]);
 });
 
@@ -289,4 +289,22 @@ test('unload cancels animation and gesture timers; reduced motion moves directly
   reduced.wheel(0, 40);
   assert.deepEqual(reduced.moves, [[16, 16]]);
   assert.equal(reduced.frames.size, 0);
+});
+
+
+test('flight gently accelerates and decelerates symmetrically without overshoot', () => {
+  const p = player({ left: 1024, top: 659 });
+  p.wheel(0, 40);
+  const positions = [659];
+  for (let frame = 0; frame < 8; frame++) {
+    p.advance(75);
+    positions.push(p.window.screenY);
+  }
+  const steps = positions.slice(1).map((y, i) => positions[i] - y);
+  assert.ok(steps[0] < steps[1] && steps[1] < steps[2] && steps[2] < steps[3]);
+  assert.ok(steps[4] > steps[5] && steps[5] > steps[6] && steps[6] > steps[7]);
+  for (let i = 0; i < 4; i++) assert.ok(Math.abs(steps[i] - steps[7 - i]) <= 1);
+  assert.ok(positions.every(y => y >= 16 && y <= 659));
+  assert.deepEqual(p.moves.at(-1), [1024, 16]);
+  assert.equal(p.frames.size, 0);
 });

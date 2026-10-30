@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.0
+// @version        1.3.1
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -153,8 +153,10 @@
       flight = { frame: null, x, y };
       const tick = now => {
         if (unavailable()) { stopFlight(); return; }
-        const progress = Math.min(1, Math.max(0, (now - started) / 280));
-        const eased = 1 - (1 - progress) ** 3;
+        const progress = Math.min(1, Math.max(0, (now - started) / 600));
+        // Smootherstep has zero velocity AND acceleration at both ends:
+        // gently accelerate out of the corner, then settle without a hard stop.
+        const eased = progress ** 3 * (progress * (progress * 6 - 15) + 10);
         window.moveTo(Math.round(startX + (x - startX) * eased), Math.round(startY + (y - startY) * eased));
         if (progress < 1) flight.frame = window.requestAnimationFrame(tick);
         else flight = null;
