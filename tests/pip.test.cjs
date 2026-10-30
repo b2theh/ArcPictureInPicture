@@ -70,3 +70,92 @@ test('reloading a script does not accumulate observers or lose original values',
   assert.equal(env.values.get(ROOT + 'enabled'), false);
   assert.equal(env.values.has(ROOT + 'enable-when-switching-tabs.enabled'), false);
 });
+
+function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
+  const handlers = new Map();
+  const captured = new Set();
+  const moves = [];
+  const controls = {
+    addEventListener: (n, cb) => handlers.set(n, cb),
+    removeEventListener: n => handlers.delete(n),
+    setPointerCapture: id => captured.add(id),
+    hasPointerCapture: id => captured.has(id),
+    releasePointerCapture: id => captured.delete(id),
+    appendChild() {},
+  };
+  const elements = new Map(['unpip', 'minimize', 'close'].map(id => [id, { appendChild() {} }]));
+  elements.set('controls', controls);
+  const window = {
+    screenX: left, screenY: top, outerWidth: 400, outerHeight: 225,
+    screen: { availLeft: screenLeft, availTop: screenTop, availWidth: 1440, availHeight: 900 },
+    addEventListener() {}, removeEventListener() {},
+    moveTo(x, y) { moves.push([x, y]); this.screenX = x; this.screenY = y; },
+  };
+  const document = {
+    readyState: 'complete',
+    getElementById: id => elements.get(id),
+    createElementNS: () => ({ setAttribute() {}, remove() {} }),
+  };
+  vm.runInNewContext(code, {
+    window, document,
+    location: { href: 'chrome://global/content/pictureinpicture/player.xhtml' },
+    ChromeUtils: { importESModule: () => ({ PictureInPicture: {
+      weakWinToBrowser: new Map([[window, { currentURI: { displayHost: 'example.com' } }]]),
+    } }) },
+  });
+  const fire = (type, x, y, interactive = false) => handlers.get(type)?.({
+    type, button: 0, pointerId: 1, screenX: x, screenY: y,
+    target: { closest: () => interactive }, preventDefault() {},
+  });
+  return { window, moves, fire, handlers, captured };
+}
+
+test('drag detaches freely and snaps to the bottom right only after release', () => {
+  const p = player();
+  p.fire('pointerdown', 600, 350);
+  p.fire('pointermove', 1100, 700);
+  assert.deepEqual(p.moves, [[1000, 650]]);
+  p.fire('pointerup', 1100, 700);
+  assert.deepEqual(p.moves.at(-1), [1024, 659]);
+  p.fire('pointerdown', 1100, 700);
+  p.fire('pointermove', 800, 500);
+  p.fire('pointerup', 800, 500);
+  assert.deepEqual(p.moves.at(-1), [724, 459]);
+});
+
+test('all four corners use the current monitor work area, including negative coordinates', () => {
+  for (const [x, y] of [[-1424, -884], [-416, -884], [-1424, -241], [-416, -241]]) {
+    const p = player({ left: -900, top: -500, screenLeft: -1440, screenTop: -900 });
+    p.fire('pointerdown', 0, 0);
+    p.fire('pointermove', x + 900 + 20, y + 500 + 20);
+    p.fire('pointerup', 0, 0);
+    assert.deepEqual(p.moves.at(-1), [x, y]);
+  }
+});
+
+test('proximity to one edge alone does not pull the window into a corner', () => {
+  const p = player();
+  p.fire('pointerdown', 0, 0);
+  p.fire('pointermove', -480, 0);
+  p.fire('pointerup', 0, 0);
+  assert.deepEqual(p.moves, [[20, 300]]);
+});
+
+test('buttons, fullscreen and a cancelled gesture never snap; unload releases capture', () => {
+  const p = player();
+  p.fire('pointerdown', 0, 0, true);
+  p.fire('pointermove', 500, 350);
+  assert.equal(p.moves.length, 0);
+  p.window.fullScreen = true;
+  p.fire('pointerdown', 0, 0);
+  assert.equal(p.captured.size, 0);
+  p.window.fullScreen = false;
+  p.fire('pointerdown', 0, 0);
+  p.fire('pointermove', 500, 350);
+  p.fire('pointercancel', 500, 350);
+  assert.deepEqual(p.moves, [[1000, 650]]);
+  p.fire('pointerdown', 0, 0);
+  p.window.arcPictureInPicture.destroy();
+  assert.equal(p.handlers.size, 0);
+  assert.equal(p.captured.size, 0);
+});
