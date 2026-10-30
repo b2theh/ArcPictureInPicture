@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.10
+// @version        1.3.11
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -128,7 +128,12 @@
       if (!hovered) scheduleHide();
     }
     const enter = () => { hovered = true; show(); };
-    const leave = () => { hovered = false; scheduleHide(); };
+    const leave = () => {
+      hovered = false;
+      cancel();
+      // Start the CSS fade immediately; keep the overlay available for re-entry.
+      controls.setAttribute("arc-pip-ui", "hidden");
+    };
     const listeners = [["pointerenter", enter], ["pointerleave", leave], ["focusin", show], ["keydown", show]];
     for (const [type, handler] of listeners) controls.addEventListener(type, handler);
     show();

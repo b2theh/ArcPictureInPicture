@@ -354,30 +354,26 @@ test('swipe changes speed gradually across the entire path, without a fast-to-sl
   assert.equal(p.frames.size, 0);
 });
 
-test('controls remain visible for three seconds after leaving and hide only at the deadline', () => {
+test('leaving immediately starts the CSS fade with no delayed hiding timer', () => {
   const p = player();
   p.fire('pointerleave');
-  p.elapse(2999);
-  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
-  p.elapse(1);
   assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
+  assert.equal(p.timers.size, 0);
   p.fire('pointerenter');
   assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
   assert.equal(p.timers.size, 0);
 });
 
-test('returning the cursor cancels hiding and the next leave starts a fresh three seconds', () => {
+test('returning during a fade immediately reverses visibility without a stale timer', () => {
   const p = player();
   p.fire('pointerleave');
-  p.elapse(2000);
+  p.elapse(150);
   p.fire('pointerenter');
   p.elapse(2000);
   assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
   p.fire('pointerleave');
-  p.elapse(2999);
-  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
-  p.elapse(1);
   assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
+  assert.equal(p.timers.size, 0);
 });
 
 test('opening without hover schedules hiding; keyboard focus reveals controls and unload clears the timer', () => {
