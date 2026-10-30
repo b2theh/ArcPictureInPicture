@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.5
+// @version        1.3.6
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -141,7 +141,7 @@
 
   function installCornerDrag(controls) {
     const GAP = 16;
-    const RADIUS = 80;
+    const RADIUS = 160;
     let drag = null;
     let wheelTimer = null;
     let gesture = null;
@@ -165,14 +165,14 @@
       const y = ys.reduce((a, b) => Math.abs(window.screenY - a) <= Math.abs(window.screenY - b) ? a : b);
       // Only corners attract: being close to just one edge is insufficient.
       if (Math.abs(window.screenX - x) <= RADIUS && Math.abs(window.screenY - y) <= RADIUS) {
-        window.moveTo(x, y);
+        flyTo(x, y, true);
       }
     };
     function stopFlight() {
       if (flight !== null) window.cancelAnimationFrame(flight.frame);
       flight = null;
     }
-    function flyTo(x, y) {
+    function flyTo(x, y, soft = false) {
       stopFlight();
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         window.moveTo(x, y);
@@ -185,11 +185,14 @@
       flight = { frame: null, x, y };
       const tick = now => {
         if (unavailable()) { stopFlight(); return; }
-        const progress = Math.min(1, Math.max(0, (now - started) / 340));
+        const progress = Math.min(1, Math.max(0, (now - started) / (soft ? 380 : 340)));
         // Asymmetric Beta(3,5) easing: short smooth acceleration, fast travel,
         // then a longer soft landing. Velocity and acceleration are zero
         // at both ends; no spring overshoot or final position correction.
-        const eased = progress ** 3 * (35 + progress * (-105 + progress * (126 + progress * (-70 + 15 * progress))));
+        // A released drag gets a gentler symmetric pull over a short distance.
+        const eased = soft
+          ? progress ** 3 * (10 + progress * (-15 + 6 * progress))
+          : progress ** 3 * (35 + progress * (-105 + progress * (126 + progress * (-70 + 15 * progress))));
         window.moveTo(Math.round(startX + (x - startX) * eased), Math.round(startY + (y - startY) * eased));
         if (progress < 1) flight.frame = window.requestAnimationFrame(tick);
         else flight = null;

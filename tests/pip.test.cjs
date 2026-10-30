@@ -164,6 +164,10 @@ test('drag detaches freely and snaps to the bottom right only after release', ()
   p.fire('pointermove', 1100, 700);
   assert.deepEqual(p.moves, [[1000, 650]]);
   p.fire('pointerup', 1100, 700);
+  assert.deepEqual(p.moves, [[1000, 650]], 'no jump on release');
+  p.advance(190);
+  assert.deepEqual(p.moves.at(-1), [1012, 655]);
+  p.advance(190);
   assert.deepEqual(p.moves.at(-1), [1024, 659]);
   p.fire('pointerdown', 1100, 700);
   p.fire('pointermove', 800, 500);
@@ -177,6 +181,7 @@ test('all four corners use the current monitor work area, including negative coo
     p.fire('pointerdown', 0, 0);
     p.fire('pointermove', x + 900 + 20, y + 500 + 20);
     p.fire('pointerup', 0, 0);
+    p.advance(380);
     assert.deepEqual(p.moves.at(-1), [x, y]);
   }
 });
@@ -187,6 +192,30 @@ test('proximity to one edge alone does not pull the window into a corner', () =>
   p.fire('pointermove', -480, 0);
   p.fire('pointerup', 0, 0);
   assert.deepEqual(p.moves, [[20, 300]]);
+});
+
+test('manual magnet reaches 160px on each axis, leaves farther positions alone and can be interrupted', () => {
+  for (const distance of [120, 160, 161]) {
+    const p = player();
+    p.fire('pointerdown', 0, 0);
+    p.fire('pointermove', 1024 - distance - 500, 659 - distance - 300);
+    p.fire('pointerup', 0, 0);
+    if (distance <= 160) {
+      assert.equal(p.frames.size, 1);
+      p.advance(380);
+      assert.deepEqual(p.moves.at(-1), [1024, 659]);
+    } else {
+      assert.equal(p.frames.size, 0);
+      assert.deepEqual(p.moves.at(-1), [863, 498]);
+    }
+  }
+  const p = player();
+  p.fire('pointerdown', 0, 0);
+  p.fire('pointermove', 400, 300);
+  p.fire('pointerup', 0, 0);
+  p.advance(100);
+  p.fire('pointerdown', 0, 0);
+  assert.equal(p.frames.size, 0);
 });
 
 test('buttons, fullscreen and a cancelled gesture never snap; unload releases capture', () => {
