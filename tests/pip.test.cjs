@@ -219,9 +219,9 @@ test('each swipe direction selects the corresponding corner while preserving the
     const p = player({ left, top });
     assert.equal(p.wheel(dx, dy).prevented, true);
     assert.equal(p.moves.length, 0);
-    p.advance(300);
+    p.advance(200);
     assert.notDeepEqual(p.moves.at(-1), [x, y]);
-    p.advance(300);
+    p.advance(200);
     assert.deepEqual(p.moves.at(-1), [x, y]);
     assert.equal(p.frames.size, 0);
   }
@@ -230,7 +230,7 @@ test('each swipe direction selects the corresponding corner while preserving the
 test('a swipe from the center uses the dominant direction and nearest perpendicular side', () => {
   const p = player({ left: 700, top: 400 });
   p.wheel(8, 40);
-  p.advance(600);
+  p.advance(400);
   assert.deepEqual(p.moves.at(-1), [1024, 16]);
 });
 
@@ -241,26 +241,26 @@ test('small touches accumulate to a threshold; a momentum stream triggers one fl
   assert.equal(p.frames.size, 0);
   p.wheel(0, 5);
   assert.equal(p.frames.size, 1);
-  p.advance(600);
+  p.advance(400);
   // A reversed inertia tail must not send the window back down.
   p.wheel(0, -100);
-  p.advance(600);
+  p.advance(400);
   assert.deepEqual(p.moves, [[1024, 16]]);
   assert.equal(p.timers.size, 1);
   p.settle();
   p.wheel(0, -40);
-  p.advance(600);
+  p.advance(400);
   assert.deepEqual(p.moves.at(-1), [1024, 659]);
 });
 
 test('wheel line/page units and monitors with negative origins choose valid corners', () => {
   const p = player({ left: -416, top: -241, screenLeft: -1440, screenTop: -900 });
   p.wheel(2, 0, { deltaMode: 1 });
-  p.advance(600);
+  p.advance(400);
   assert.deepEqual(p.moves.at(-1), [-1424, -241]);
   p.settle();
   p.wheel(0, 1, { deltaMode: 2 });
-  p.advance(600);
+  p.advance(400);
   assert.deepEqual(p.moves.at(-1), [-1424, -884]);
 });
 
@@ -284,7 +284,7 @@ test('grabbing an animating window stops the flight and continues a free drag', 
   assert.equal(p.timers.size, 0);
   p.fire('pointermove', -200, 100);
   p.fire('pointerup', -200, 100);
-  p.advance(600);
+  p.advance(400);
   assert.deepEqual(p.moves.at(-1), [824, y + 100]);
 });
 
@@ -307,7 +307,7 @@ test('flight gently accelerates and decelerates symmetrically without overshoot'
   p.wheel(0, 40);
   const positions = [659];
   for (let frame = 0; frame < 8; frame++) {
-    p.advance(75);
+    p.advance(50);
     positions.push(p.window.screenY);
   }
   const steps = positions.slice(1).map((y, i) => positions[i] - y);
@@ -323,10 +323,10 @@ test('flight gently accelerates and decelerates symmetrically without overshoot'
   assert.equal(p.frames.size, 0);
 });
 
-test('controls remain visible for four seconds after leaving and hide only at the deadline', () => {
+test('controls remain visible for three seconds after leaving and hide only at the deadline', () => {
   const p = player();
   p.fire('pointerleave');
-  p.elapse(3999);
+  p.elapse(2999);
   assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
   p.elapse(1);
   assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
@@ -335,15 +335,15 @@ test('controls remain visible for four seconds after leaving and hide only at th
   assert.equal(p.timers.size, 0);
 });
 
-test('returning the cursor cancels hiding and the next leave starts a fresh four seconds', () => {
+test('returning the cursor cancels hiding and the next leave starts a fresh three seconds', () => {
   const p = player();
   p.fire('pointerleave');
-  p.elapse(3000);
+  p.elapse(2000);
   p.fire('pointerenter');
   p.elapse(2000);
   assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
   p.fire('pointerleave');
-  p.elapse(3999);
+  p.elapse(2999);
   assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
   p.elapse(1);
   assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
@@ -351,13 +351,13 @@ test('returning the cursor cancels hiding and the next leave starts a fresh four
 
 test('opening without hover schedules hiding; keyboard focus reveals controls and unload clears the timer', () => {
   const p = player({ hovered: false });
-  p.elapse(4000);
+  p.elapse(3000);
   assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
   p.fire('focusin');
   assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
-  p.elapse(3000);
+  p.elapse(2000);
   p.fire('keydown');
-  p.elapse(3000);
+  p.elapse(2000);
   assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
   p.window.arcPictureInPicture.destroy();
   assert.equal(p.timers.size, 0);

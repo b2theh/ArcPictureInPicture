@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.2
+// @version        1.3.3
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -120,7 +120,7 @@
       timer = window.setTimeout(() => {
         timer = null;
         controls.setAttribute("arc-pip-ui", "hidden");
-      }, 4000);
+      }, 3000);
     }
     function show() {
       cancel();
@@ -185,7 +185,7 @@
       flight = { frame: null, x, y };
       const tick = now => {
         if (unavailable()) { stopFlight(); return; }
-        const progress = Math.min(1, Math.max(0, (now - started) / 600));
+        const progress = Math.min(1, Math.max(0, (now - started) / 400));
         // Seventh-order smoothstep concentrates speed at the midpoint while
         // keeping velocity, acceleration and jerk zero at both endpoints.
         const eased = progress ** 4 * (35 + progress * (-84 + progress * (70 - 20 * progress)));
