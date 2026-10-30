@@ -248,9 +248,9 @@ test('each swipe direction selects the corresponding corner while preserving the
     const p = player({ left, top });
     assert.equal(p.wheel(dx, dy).prevented, true);
     assert.equal(p.moves.length, 0);
-    p.advance(240);
+    p.advance(450);
     assert.notDeepEqual(p.moves.at(-1), [x, y]);
-    p.advance(240);
+    p.advance(450);
     assert.deepEqual(p.moves.at(-1), [x, y]);
     assert.equal(p.frames.size, 0);
   }
@@ -259,7 +259,7 @@ test('each swipe direction selects the corresponding corner while preserving the
 test('a swipe from the center uses the dominant direction and nearest perpendicular side', () => {
   const p = player({ left: 700, top: 400 });
   p.wheel(8, 40);
-  p.advance(480);
+  p.advance(900);
   assert.deepEqual(p.moves.at(-1), [1024, 16]);
 });
 
@@ -270,26 +270,26 @@ test('small touches accumulate to a threshold; a momentum stream triggers one fl
   assert.equal(p.frames.size, 0);
   p.wheel(0, 5);
   assert.equal(p.frames.size, 1);
-  p.advance(480);
+  p.advance(900);
   // A reversed inertia tail must not send the window back down.
   p.wheel(0, -100);
-  p.advance(480);
+  p.advance(900);
   assert.deepEqual(p.moves, [[1024, 16]]);
   assert.equal(p.timers.size, 1);
   p.settle();
   p.wheel(0, -40);
-  p.advance(480);
+  p.advance(900);
   assert.deepEqual(p.moves.at(-1), [1024, 659]);
 });
 
 test('wheel line/page units and monitors with negative origins choose valid corners', () => {
   const p = player({ left: -416, top: -241, screenLeft: -1440, screenTop: -900 });
   p.wheel(2, 0, { deltaMode: 1 });
-  p.advance(480);
+  p.advance(900);
   assert.deepEqual(p.moves.at(-1), [-1424, -241]);
   p.settle();
   p.wheel(0, 1, { deltaMode: 2 });
-  p.advance(480);
+  p.advance(900);
   assert.deepEqual(p.moves.at(-1), [-1424, -884]);
 });
 
@@ -313,7 +313,7 @@ test('grabbing an animating window stops the flight and continues a free drag', 
   assert.equal(p.timers.size, 0);
   p.fire('pointermove', -200, 100);
   p.fire('pointerup', -200, 100);
-  p.advance(480);
+  p.advance(900);
   assert.deepEqual(p.moves.at(-1), [824, y + 100]);
 });
 
@@ -331,24 +331,35 @@ test('unload cancels animation and gesture timers; reduced motion moves directly
 });
 
 
-test('swipe crosses quickly then softly magnetizes into the corner without overshoot', () => {
+test('swipe brakes visibly through the final 160px over 700ms without a final jump', () => {
   const p = player({ left: 1024, top: 659 });
   p.wheel(0, 40);
-  p.advance(160);
-  assert.ok((659 - p.window.screenY) / 643 >= 0.75, 'fast transit: 75% within 160ms');
-  p.advance(40);
-  assert.ok((659 - p.window.screenY) / 643 >= 0.90, '90% within 200ms');
+  p.advance(200);
+  assert.equal(p.window.screenY, 176, 'fast transit stops 160px from the corner');
   const positions = [p.window.screenY];
-  for (let frame = 0; frame < 7; frame++) {
-    p.advance(40);
+  for (let frame = 0; frame < 14; frame++) {
+    p.advance(50);
     positions.push(p.window.screenY);
   }
   const steps = positions.slice(1).map((y, i) => positions[i] - y);
-  for (let i = 1; i < steps.length; i++) assert.ok(steps[i] <= steps[i - 1], 'magnet phase continuously slows down');
-  assert.ok(steps.at(-2) <= 1 && steps.at(-1) <= 1, 'no jump when the window reaches its corner');
-  assert.ok(positions.every(y => y >= 16 && y <= 659));
+  for (let i = 1; i < steps.length; i++) assert.ok(steps[i] <= steps[i - 1] + 1, 'continuous braking, allowing pixel rounding');
+  assert.ok(positions[7] - 16 >= 25, 'halfway through landing, 25+ pixels still remain: not an invisible tail');
+  assert.ok(steps.at(-1) <= 1, 'no jump at the final corner');
+  assert.ok(positions.every(y => y >= 16 && y <= 176));
   assert.deepEqual(p.moves.at(-1), [1024, 16]);
   assert.equal(p.frames.size, 0);
+});
+
+test('transit and magnet phases join without a sudden velocity jump', () => {
+  const p = player({ left: 1024, top: 659 });
+  p.wheel(0, 40);
+  p.advance(195);
+  const before = p.window.screenY;
+  p.advance(5);
+  const boundary = p.window.screenY;
+  p.advance(5);
+  const after = p.window.screenY;
+  assert.ok(Math.abs((before - boundary) - (boundary - after)) <= 1);
 });
 
 test('controls remain visible for three seconds after leaving and hide only at the deadline', () => {
