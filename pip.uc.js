@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.8
+// @version        1.3.9
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -181,30 +181,18 @@
       const startX = window.screenX;
       const startY = window.screenY;
       if (startX === x && startY === y) return;
-      const distance = Math.hypot(x - startX, y - startY);
-      const landingShare = Math.min(160 / distance, 0.35);
-      const transitShare = 1 - landingShare;
       const started = window.performance.now();
       flight = { frame: null, x, y };
       const tick = now => {
         if (unavailable()) { stopFlight(); return; }
         const elapsed = Math.max(0, now - started);
-        const progress = Math.min(1, elapsed / (soft ? 380 : 900));
-        let eased;
-        if (soft) {
-          eased = progress ** 3 * (10 + progress * (-15 + 6 * progress));
-        } else if (elapsed < 200) {
-          // Fast transit with a quintic Hermite curve. Match the landing's
-          // entry velocity AND acceleration to avoid a jolt at the boundary.
-          const t = elapsed / 200;
-          const slope = 2 * landingShare * 200 / (700 * transitShare);
-          eased = transitShare * t ** 3 * (10 - 4 * slope + t * (-15 + 7 * slope + t * (6 - 3 * slope)));
-        } else {
-          // Spend 700ms visibly slowing through the last 160px (at most 35%
-          // of short trips), rather than spending a long tail already at 1px.
-          const t = Math.min(1, (elapsed - 200) / 700);
-          eased = transitShare + landingShare * (2 * t - 2 * t ** 3 + t ** 4);
-        }
+        const progress = Math.min(1, elapsed / (soft ? 380 : 520));
+        // One continuous Beta(4,5) curve across the whole swipe. No distance
+        // threshold or phase switch: speed and its derivatives change smoothly.
+        // Its broader speed peak avoids the abrupt fast-to-slow contrast.
+        const eased = soft
+          ? progress ** 3 * (10 + progress * (-15 + 6 * progress))
+          : 1 - (1 - progress) ** 5 * (1 + 5 * progress + 15 * progress ** 2 + 35 * progress ** 3);
         window.moveTo(Math.round(startX + (x - startX) * eased), Math.round(startY + (y - startY) * eased));
         if (progress < 1) flight.frame = window.requestAnimationFrame(tick);
         else flight = null;
