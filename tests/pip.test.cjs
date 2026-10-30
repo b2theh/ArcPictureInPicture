@@ -248,9 +248,9 @@ test('each swipe direction selects the corresponding corner while preserving the
     const p = player({ left, top });
     assert.equal(p.wheel(dx, dy).prevented, true);
     assert.equal(p.moves.length, 0);
-    p.advance(170);
+    p.advance(240);
     assert.notDeepEqual(p.moves.at(-1), [x, y]);
-    p.advance(170);
+    p.advance(240);
     assert.deepEqual(p.moves.at(-1), [x, y]);
     assert.equal(p.frames.size, 0);
   }
@@ -259,7 +259,7 @@ test('each swipe direction selects the corresponding corner while preserving the
 test('a swipe from the center uses the dominant direction and nearest perpendicular side', () => {
   const p = player({ left: 700, top: 400 });
   p.wheel(8, 40);
-  p.advance(340);
+  p.advance(480);
   assert.deepEqual(p.moves.at(-1), [1024, 16]);
 });
 
@@ -270,26 +270,26 @@ test('small touches accumulate to a threshold; a momentum stream triggers one fl
   assert.equal(p.frames.size, 0);
   p.wheel(0, 5);
   assert.equal(p.frames.size, 1);
-  p.advance(340);
+  p.advance(480);
   // A reversed inertia tail must not send the window back down.
   p.wheel(0, -100);
-  p.advance(340);
+  p.advance(480);
   assert.deepEqual(p.moves, [[1024, 16]]);
   assert.equal(p.timers.size, 1);
   p.settle();
   p.wheel(0, -40);
-  p.advance(340);
+  p.advance(480);
   assert.deepEqual(p.moves.at(-1), [1024, 659]);
 });
 
 test('wheel line/page units and monitors with negative origins choose valid corners', () => {
   const p = player({ left: -416, top: -241, screenLeft: -1440, screenTop: -900 });
   p.wheel(2, 0, { deltaMode: 1 });
-  p.advance(340);
+  p.advance(480);
   assert.deepEqual(p.moves.at(-1), [-1424, -241]);
   p.settle();
   p.wheel(0, 1, { deltaMode: 2 });
-  p.advance(340);
+  p.advance(480);
   assert.deepEqual(p.moves.at(-1), [-1424, -884]);
 });
 
@@ -313,7 +313,7 @@ test('grabbing an animating window stops the flight and continues a free drag', 
   assert.equal(p.timers.size, 0);
   p.fire('pointermove', -200, 100);
   p.fire('pointerup', -200, 100);
-  p.advance(340);
+  p.advance(480);
   assert.deepEqual(p.moves.at(-1), [824, y + 100]);
 });
 
@@ -331,20 +331,21 @@ test('unload cancels animation and gesture timers; reduced motion moves directly
 });
 
 
-test('flight covers most of the path quickly and settles softly into the corner without overshoot', () => {
+test('swipe crosses quickly then softly magnetizes into the corner without overshoot', () => {
   const p = player({ left: 1024, top: 659 });
   p.wheel(0, 40);
-  const positions = [659];
-  for (let frame = 0; frame < 10; frame++) {
-    p.advance(34);
+  p.advance(160);
+  assert.ok((659 - p.window.screenY) / 643 >= 0.75, 'fast transit: 75% within 160ms');
+  p.advance(40);
+  assert.ok((659 - p.window.screenY) / 643 >= 0.90, '90% within 200ms');
+  const positions = [p.window.screenY];
+  for (let frame = 0; frame < 7; frame++) {
+    p.advance(40);
     positions.push(p.window.screenY);
   }
   const steps = positions.slice(1).map((y, i) => positions[i] - y);
-  assert.ok(steps[0] < steps[1] && steps[1] < steps[2]);
-  assert.ok((659 - positions[5]) / 643 > 0.75, 'at least 75% of travel in the first 170ms');
-  assert.ok((659 - positions[7]) / 643 > 0.96, 'at least 96% of travel in the first 238ms');
-  for (let i = 4; i < steps.length; i++) assert.ok(steps[i] <= steps[i - 1], 'continuous braking after the speed peak');
-  assert.ok(steps[8] <= 4 && steps[9] <= 1, 'last 68ms settle by a few pixels, without a final jump');
+  for (let i = 1; i < steps.length; i++) assert.ok(steps[i] <= steps[i - 1], 'magnet phase continuously slows down');
+  assert.ok(steps.at(-2) <= 1 && steps.at(-1) <= 1, 'no jump when the window reaches its corner');
   assert.ok(positions.every(y => y >= 16 && y <= 659));
   assert.deepEqual(p.moves.at(-1), [1024, 16]);
   assert.equal(p.frames.size, 0);

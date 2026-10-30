@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.6
+// @version        1.3.7
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -185,14 +185,13 @@
       flight = { frame: null, x, y };
       const tick = now => {
         if (unavailable()) { stopFlight(); return; }
-        const progress = Math.min(1, Math.max(0, (now - started) / (soft ? 380 : 340)));
-        // Asymmetric Beta(3,5) easing: short smooth acceleration, fast travel,
-        // then a longer soft landing. Velocity and acceleration are zero
-        // at both ends; no spring overshoot or final position correction.
-        // A released drag gets a gentler symmetric pull over a short distance.
+        const progress = Math.min(1, Math.max(0, (now - started) / (soft ? 380 : 480)));
+        // A swipe crosses the screen quickly, then spends longer settling
+        // into the corner: Beta(3,9), 75% travel in ~157ms, 90% in ~200ms.
+        // Both modes have zero endpoint velocity/acceleration and no overshoot.
         const eased = soft
           ? progress ** 3 * (10 + progress * (-15 + 6 * progress))
-          : progress ** 3 * (35 + progress * (-105 + progress * (126 + progress * (-70 + 15 * progress))));
+          : 1 - (1 - progress) ** 9 * (1 + 9 * progress + 45 * progress ** 2);
         window.moveTo(Math.round(startX + (x - startX) * eased), Math.round(startY + (y - startY) * eased));
         if (progress < 1) flight.frame = window.requestAnimationFrame(tick);
         else flight = null;
