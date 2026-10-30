@@ -190,6 +190,61 @@
     pointer-events: none;
   }
   #controls #playbackRate:hover { background: #ffffff30 !important; }
+  #playbackRateSettings {
+    right: 0 !important;
+    bottom: 44px !important;
+    width: min(300px, calc(100vw - 2 * var(--arc-pip-inset) - 20px));
+    box-sizing: border-box;
+    color: white !important;
+    background: #19151fd9 !important;
+    backdrop-filter: blur(18px) !important;
+    border: 1px solid #ffffff26 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 8px 28px #0005 !important;
+    font: 500 12px/1.4 system-ui, sans-serif !important;
+  }
+  #playbackRateSettings .panel-controls-box {
+    min-width: 0 !important;
+    padding: 14px !important;
+    background: transparent !important;
+    border-radius: inherit !important;
+  }
+  #playbackRateSettings .arrow { display: none !important; }
+  #playbackRateSettings .playback-rate-header { align-items: center; gap: 12px; }
+  #playback-rate-value {
+    color: white !important;
+    background: #ffffff18;
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  #playback-rate-slider {
+    width: 100% !important;
+    box-sizing: border-box;
+    height: 22px !important;
+    margin: 12px 0 !important;
+  }
+  #playback-rate-slider::-moz-range-track { height: 4px !important; background: #ffffff35 !important; border-radius: 4px; }
+  #playback-rate-slider::-moz-range-progress { height: 4px !important; background: white !important; border-radius: 4px; }
+  #playback-rate-slider::-moz-range-thumb { width: 12px !important; height: 12px !important; background: white !important; border: 0 !important; border-radius: 50%; }
+  #playbackRateSettings .playback-rate-presets { gap: 5px !important; }
+  #playbackRateSettings .playback-rate-preset {
+    min-width: 0 !important;
+    min-height: 30px !important;
+    padding: 5px 2px !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    background: #ffffff18 !important;
+    color: white !important;
+    font: 600 11px/1 system-ui, sans-serif !important;
+    cursor: pointer;
+  }
+  #playbackRateSettings .playback-rate-preset:hover { background: #ffffff30 !important; }
+  #playbackRateSettings .playback-rate-preset[aria-pressed="true"] {
+    background: #ffffff30 !important;
+    border-color: #ffffff80 !important;
+  }
   #controls-bottom-gradient { height: 24% !important; }
 
   @media (width < 650px) {
@@ -208,5 +263,11 @@
   }
   @media (forced-colors: active) {
     #controls :is(#unpip, #minimize, #close) { background-color: Canvas !important; border: 1px solid ButtonText !important; color: ButtonText !important; }
+    #playbackRateSettings, #playback-rate-value, #playbackRateSettings .playback-rate-preset {
+      background: Canvas !important;
+      color: CanvasText !important;
+      border: 1px solid ButtonText !important;
+    }
+    #playbackRateSettings .playback-rate-preset[aria-pressed="true"] { outline: 2px solid Highlight; }
   }
 }

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.2.0
+// @version        1.3.0
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -112,16 +112,23 @@
     const RADIUS = 80;
     let drag = null;
     let wheelTimer = null;
-    let wheelPosition = null;
+    let gesture = null;
+    let flight = null;
     const unavailable = () => window.fullScreen || document.fullscreenElement || window.windowState === 2;
-    const snap = () => {
-      if (unavailable()) return;
+    const corners = () => {
       const { availLeft: left, availTop: top, availWidth: width, availHeight: height } = window.screen;
       // All coordinates are CSS screen pixels, as expected by chrome moveTo.
       if (![left, top, width, height, window.outerWidth, window.outerHeight].every(Number.isFinite)) return;
       if (window.outerWidth + GAP * 2 > width || window.outerHeight + GAP * 2 > height) return;
       const xs = [left + GAP, left + width - window.outerWidth - GAP];
       const ys = [top + GAP, top + height - window.outerHeight - GAP];
+      return { xs, ys };
+    };
+    const snap = () => {
+      if (unavailable()) return;
+      const bounds = corners();
+      if (!bounds) return;
+      const { xs, ys } = bounds;
       const x = xs.reduce((a, b) => Math.abs(window.screenX - a) <= Math.abs(window.screenX - b) ? a : b);
       const y = ys.reduce((a, b) => Math.abs(window.screenY - a) <= Math.abs(window.screenY - b) ? a : b);
       // Only corners attract: being close to just one edge is insufficient.
@@ -129,9 +136,35 @@
         window.moveTo(x, y);
       }
     };
+    function stopFlight() {
+      if (flight !== null) window.cancelAnimationFrame(flight.frame);
+      flight = null;
+    }
+    function flyTo(x, y) {
+      stopFlight();
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        window.moveTo(x, y);
+        return;
+      }
+      const startX = window.screenX;
+      const startY = window.screenY;
+      if (startX === x && startY === y) return;
+      const started = window.performance.now();
+      flight = { frame: null, x, y };
+      const tick = now => {
+        if (unavailable()) { stopFlight(); return; }
+        const progress = Math.min(1, Math.max(0, (now - started) / 280));
+        const eased = 1 - (1 - progress) ** 3;
+        window.moveTo(Math.round(startX + (x - startX) * eased), Math.round(startY + (y - startY) * eased));
+        if (progress < 1) flight.frame = window.requestAnimationFrame(tick);
+        else flight = null;
+      };
+      flight.frame = window.requestAnimationFrame(tick);
+    }
     const down = event => {
       if (event.button !== 0 || unavailable() || drag) return;
       cancelWheel();
+      stopFlight();
       if (event.target.closest("button, input, a, .panel, #timestamp")) return;
       drag = {
         id: event.pointerId, x: event.screenX, y: event.screenY,
@@ -160,7 +193,7 @@
     function cancelWheel() {
       if (wheelTimer !== null) window.clearTimeout(wheelTimer);
       wheelTimer = null;
-      wheelPosition = null;
+      gesture = null;
     }
     const wheel = event => {
       if (drag || unavailable() || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -171,25 +204,31 @@
       const dx = event.deltaX * scaleX;
       const dy = event.deltaY * scaleY;
       if (!Number.isFinite(dx) || !Number.isFinite(dy) || (!dx && !dy)) return;
-      const { availLeft: left, availTop: top, availWidth: width, availHeight: height } = window.screen;
-      // Keep swipe movement within the current display's usable area.
-      if (![left, top, width, height].every(Number.isFinite)) return;
-      const xMax = left + Math.max(0, width - window.outerWidth);
-      const yMax = top + Math.max(0, height - window.outerHeight);
-      wheelPosition ??= { x: window.screenX, y: window.screenY };
-      // Follow the content direction selected by macOS (including Natural scrolling).
-      // Preserve fractional deltas so slow Magic Mouse swipes still move the window.
-      wheelPosition.x = Math.max(left, Math.min(xMax, wheelPosition.x - dx));
-      wheelPosition.y = Math.max(top, Math.min(yMax, wheelPosition.y - dy));
-      window.moveTo(Math.round(wheelPosition.x), Math.round(wheelPosition.y));
+      const bounds = corners();
+      if (!bounds) return;
       event.preventDefault();
       event.stopPropagation();
+      gesture ??= { x: 0, y: 0, fired: false };
+      // Accumulate small deltas to reject accidental touches, then choose one
+      // direction. Inertia belongs to that same swipe and cannot retrigger it.
+      gesture.x -= dx;
+      gesture.y -= dy;
+      if (!gesture.fired && Math.max(Math.abs(gesture.x), Math.abs(gesture.y)) >= 24) {
+        gesture.fired = true;
+        const { xs, ys } = bounds;
+        const baseX = flight?.x ?? window.screenX;
+        const baseY = flight?.y ?? window.screenY;
+        let x = Math.abs(baseX - xs[0]) <= Math.abs(baseX - xs[1]) ? xs[0] : xs[1];
+        let y = Math.abs(baseY - ys[0]) <= Math.abs(baseY - ys[1]) ? ys[0] : ys[1];
+        if (Math.abs(gesture.x) > Math.abs(gesture.y)) x = gesture.x < 0 ? xs[0] : xs[1];
+        else y = gesture.y < 0 ? ys[0] : ys[1];
+        flyTo(x, y);
+      }
       if (wheelTimer !== null) window.clearTimeout(wheelTimer);
-      // Each momentum event extends the gesture; snap only once it settles.
+      // Wait for the entire momentum stream to stop before accepting a new swipe.
       wheelTimer = window.setTimeout(() => {
         wheelTimer = null;
-        wheelPosition = null;
-        snap();
+        gesture = null;
       }, 220);
     };
     const listeners = [
@@ -200,6 +239,7 @@
     controls.addEventListener("wheel", wheel, { passive: false });
     cleanups.push(() => {
       cancelWheel();
+      stopFlight();
       controls.removeEventListener("wheel", wheel);
       for (const [type, listener] of listeners) controls.removeEventListener(type, listener);
       if (drag && controls.hasPointerCapture(drag.id)) controls.releasePointerCapture(drag.id);

@@ -82,6 +82,8 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
   const captured = new Set();
   const moves = [];
   const timers = new Map();
+  const frames = new Map();
+  let now = 0;
   let nextTimer = 0;
   const controls = {
     addEventListener: (n, cb) => handlers.set(n, cb),
@@ -101,6 +103,10 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
     moveTo(x, y) { moves.push([x, y]); this.screenX = x; this.screenY = y; },
     setTimeout(cb) { const id = ++nextTimer; timers.set(id, cb); return id; },
     clearTimeout(id) { timers.delete(id); },
+    performance: { now: () => now },
+    matchMedia: () => ({ matches: false }),
+    requestAnimationFrame(cb) { const id = ++nextTimer; frames.set(id, cb); return id; },
+    cancelAnimationFrame: id => frames.delete(id),
   };
   const document = {
     readyState: 'complete',
@@ -133,7 +139,13 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
     timers.clear();
     for (const cb of callbacks) cb();
   };
-  return { window, moves, fire, handlers, captured, wheel, settle, timers };
+  const advance = ms => {
+    now += ms;
+    const callbacks = [...frames.values()];
+    frames.clear();
+    for (const cb of callbacks) cb(now);
+  };
+  return { window, moves, fire, handlers, captured, wheel, settle, timers, frames, advance };
 }
 
 test('drag detaches freely and snaps to the bottom right only after release', () => {
@@ -186,55 +198,95 @@ test('buttons, fullscreen and a cancelled gesture never snap; unload releases ca
   assert.equal(p.captured.size, 0);
 });
 
-test('Magic Mouse swipes move both axes and retain small fractional deltas', () => {
-  const p = player();
-  assert.equal(p.wheel(20, -30).prevented, true);
-  assert.deepEqual(p.moves.at(-1), [480, 330]);
-  for (let i = 0; i < 10; i++) p.wheel(0.2, 0.2);
-  assert.deepEqual(p.moves.at(-1), [478, 328]);
-  assert.equal(p.timers.size, 1);
+test('each swipe direction selects the corresponding corner while preserving the other side', () => {
+  const cases = [
+    [1024, 659, 0, 40, 1024, 16],
+    [16, 16, 0, -40, 16, 659],
+    [1024, 16, 40, 0, 16, 16],
+    [16, 659, -40, 0, 1024, 659],
+  ];
+  for (const [left, top, dx, dy, x, y] of cases) {
+    const p = player({ left, top });
+    assert.equal(p.wheel(dx, dy).prevented, true);
+    assert.equal(p.moves.length, 0);
+    p.advance(140);
+    assert.notDeepEqual(p.moves.at(-1), [x, y]);
+    p.advance(140);
+    assert.deepEqual(p.moves.at(-1), [x, y]);
+    assert.equal(p.frames.size, 0);
+  }
 });
 
-test('swipe momentum delays corner snapping until the gesture settles', () => {
-  const p = player();
-  p.wheel(-500, -350);
-  assert.deepEqual(p.moves, [[1000, 650]]);
-  p.wheel(-5, -2);
-  assert.deepEqual(p.moves.at(-1), [1005, 652]);
+test('a swipe from the center uses the dominant direction and nearest perpendicular side', () => {
+  const p = player({ left: 700, top: 400 });
+  p.wheel(8, 40);
+  p.advance(280);
+  assert.deepEqual(p.moves.at(-1), [1024, 16]);
+});
+
+test('small touches accumulate to a threshold; a momentum stream triggers one flight', () => {
+  const p = player({ left: 1024, top: 659 });
+  p.wheel(0, 10);
+  p.wheel(0, 10);
+  assert.equal(p.frames.size, 0);
+  p.wheel(0, 5);
+  assert.equal(p.frames.size, 1);
+  p.advance(280);
+  // A reversed inertia tail must not send the window back down.
+  p.wheel(0, -100);
+  p.advance(280);
+  assert.deepEqual(p.moves, [[1024, 16]]);
   assert.equal(p.timers.size, 1);
   p.settle();
+  p.wheel(0, -40);
+  p.advance(280);
   assert.deepEqual(p.moves.at(-1), [1024, 659]);
 });
 
-test('wheel units are normalized and swipes cannot push PiP out of the work area', () => {
-  const p = player();
-  p.wheel(1, -1, { deltaMode: 1 });
-  assert.deepEqual(p.moves.at(-1), [484, 316]);
-  p.wheel(1, 1, { deltaMode: 2 });
-  assert.deepEqual(p.moves.at(-1), [84, 91]);
-  p.wheel(10000, -10000);
-  assert.deepEqual(p.moves.at(-1), [0, 675]);
+test('wheel line/page units and monitors with negative origins choose valid corners', () => {
+  const p = player({ left: -416, top: -241, screenLeft: -1440, screenTop: -900 });
+  p.wheel(2, 0, { deltaMode: 1 });
+  p.advance(280);
+  assert.deepEqual(p.moves.at(-1), [-1424, -241]);
+  p.settle();
+  p.wheel(0, 1, { deltaMode: 2 });
+  p.advance(280);
+  assert.deepEqual(p.moves.at(-1), [-1424, -884]);
 });
 
 test('speed menu, sliders, modifier gestures and fullscreen do not move the window', () => {
   const p = player();
-  for (const modifier of ['ctrlKey', 'metaKey', 'altKey']) p.wheel(20, 20, { [modifier]: true });
-  p.wheel(20, 20, { target: { closest: () => true } });
+  for (const modifier of ['ctrlKey', 'metaKey', 'altKey']) p.wheel(40, 40, { [modifier]: true });
+  p.wheel(40, 40, { target: { closest: () => true } });
   p.window.fullScreen = true;
-  p.wheel(20, 20);
+  p.wheel(40, 40);
+  assert.equal(p.frames.size, 0);
   assert.equal(p.moves.length, 0);
 });
 
-test('starting a held drag cancels a pending swipe snap; unloading cancels timers', () => {
-  const p = player();
-  p.wheel(-500, -350);
+test('grabbing an animating window stops the flight and continues a free drag', () => {
+  const p = player({ left: 1024, top: 659 });
+  p.wheel(0, 40);
+  p.advance(100);
+  const y = p.window.screenY;
   p.fire('pointerdown', 0, 0);
-  p.settle();
-  assert.deepEqual(p.moves, [[1000, 650]]);
-  p.wheel(-20, -20);
-  assert.equal(p.moves.length, 1);
-  p.fire('pointercancel', 0, 0);
-  p.wheel(10, 10);
-  p.window.arcPictureInPicture.destroy();
+  assert.equal(p.frames.size, 0);
   assert.equal(p.timers.size, 0);
+  p.fire('pointermove', -200, 100);
+  p.fire('pointerup', -200, 100);
+  p.advance(280);
+  assert.deepEqual(p.moves.at(-1), [824, y + 100]);
+});
+
+test('unload cancels animation and gesture timers; reduced motion moves directly', () => {
+  const p = player();
+  p.wheel(40, 0);
+  p.window.arcPictureInPicture.destroy();
+  assert.equal(p.frames.size, 0);
+  assert.equal(p.timers.size, 0);
+  const reduced = player();
+  reduced.window.matchMedia = () => ({ matches: true });
+  reduced.wheel(0, 40);
+  assert.deepEqual(reduced.moves, [[16, 16]]);
+  assert.equal(reduced.frames.size, 0);
 });
