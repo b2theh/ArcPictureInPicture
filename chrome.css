@@ -1,0 +1,153 @@
+/* Scoped to the native PiP window; web video controls are untouched. */
+@-moz-document url("chrome://global/content/pictureinpicture/player.xhtml") {
+  :root {
+    --arc-pip-inset: clamp(10px, 1.8vw, 28px);
+    --arc-pip-button-height: clamp(30px, 3.4vw, 48px);
+    --player-control-icon-fill: white !important;
+    --close-btn-fill-color: white !important;
+    border-radius: 14px !important;
+    box-shadow: inset 0 0 0 1px #ffffff26 !important;
+    font-family: system-ui, sans-serif !important;
+  }
+
+  .player-holder { border-radius: 14px !important; }
+  #controls { overflow: visible !important; }
+  #controls::before {
+    content: "";
+    position: absolute;
+    inset: -5px -5px auto;
+    height: 28%;
+    background: linear-gradient(#09061080, transparent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 160ms;
+  }
+  #controls:is(:hover, [showing], [keying], [donthide])::before { opacity: 1; }
+
+  #controls :is(#unpip, #minimize, #close) {
+    position: absolute !important;
+    top: var(--arc-pip-inset) !important;
+    bottom: auto !important;
+    height: var(--arc-pip-button-height) !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: var(--arc-pip-button-height) !important;
+    box-sizing: border-box !important;
+    padding: 0 14px 0 38px !important;
+    border-radius: 11px !important;
+    background-color: #ffffff18 !important;
+    background-size: 19px !important;
+    background-position: 12px center !important;
+    color: white !important;
+    fill: white !important;
+    font: 600 clamp(12px, 1.5vw, 18px)/1 system-ui, sans-serif !important;
+    backdrop-filter: blur(18px) !important;
+    transform: none !important;
+    scale: none !important;
+  }
+  #controls #unpip {
+    left: var(--arc-pip-inset) !important;
+    right: auto !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 19V5h14M5 5l14 14'/%3E%3C/svg%3E") !important;
+  }
+  #controls #close {
+    right: var(--arc-pip-inset) !important;
+    left: auto !important;
+  }
+  #controls #minimize {
+    right: calc(var(--arc-pip-inset) + clamp(88px, 8vw, 109px)) !important;
+    left: auto !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E") !important;
+  }
+  #controls :is(#unpip, #minimize, #close):hover { background-color: #ffffff30 !important; }
+  #controls :is(#unpip, #minimize, #close):active { background-color: #ffffff40 !important; }
+  .arc-pip-label { pointer-events: none !important; white-space: nowrap; }
+  #arc-pip-domain {
+    position: absolute;
+    top: var(--arc-pip-inset);
+    left: 30%;
+    width: 40%;
+    line-height: var(--arc-pip-button-height);
+    text-align: center;
+    font-size: clamp(12px, 1.5vw, 18px);
+    font-weight: 600;
+    color: white;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 1px 8px #0009;
+  }
+
+  /* Keep the native elements and keyboard behavior; move playback to center. */
+  #controls-bottom { position: static !important; }
+  .center-controls {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    align-items: center !important;
+    gap: clamp(12px, 4vw, 64px) !important;
+  }
+  #controls :is(#seekBackward, #seekForward) {
+    width: clamp(32px, 6vw, 60px) !important;
+    height: clamp(32px, 6vw, 60px) !important;
+    max-width: none !important;
+    background-size: 85% !important;
+    border-radius: 50% !important;
+    filter: drop-shadow(0 2px 10px #0006);
+  }
+  #controls #playpause {
+    width: clamp(44px, 9vw, 102px) !important;
+    height: clamp(52px, 10vw, 114px) !important;
+    max-width: none !important;
+    background-size: 90% !important;
+    border-radius: 14px !important;
+    filter: drop-shadow(0 2px 10px #0006);
+  }
+  .controls-bottom-upper {
+    position: absolute !important;
+    bottom: var(--arc-pip-inset) !important;
+    left: var(--arc-pip-inset) !important;
+    width: calc(100% - 2 * var(--arc-pip-inset)) !important;
+    margin: 0 !important;
+    height: 18px !important;
+  }
+  .scrubber-no-drag { margin: 0 !important; }
+  #scrubber { padding: 6px 0 !important; }
+  #scrubber::-moz-range-track { height: 5px !important; background: #ffffff4d !important; }
+  #scrubber::-moz-range-progress { height: 5px !important; background: white !important; }
+  #scrubber::-moz-range-thumb {
+    width: 10px !important;
+    height: 5px !important;
+    border: 0 !important;
+    background: white !important;
+  }
+  .controls-bottom-lower {
+    position: static !important;
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+  }
+  /* Center relative to the full overlay, not the lower utility row. */
+  .start-controls { position: absolute; left: var(--arc-pip-inset); bottom: calc(var(--arc-pip-inset) + 28px); }
+  .end-controls { position: absolute; right: var(--arc-pip-inset); bottom: calc(var(--arc-pip-inset) + 28px); }
+  #controls-bottom-gradient { height: 24% !important; }
+
+  @media (width < 650px) {
+    #arc-pip-domain { display: none !important; }
+    #controls :is(#unpip, #minimize, #close) {
+      width: var(--arc-pip-button-height) !important;
+      padding: 0 !important;
+      background-position: center !important;
+    }
+    .arc-pip-label { display: none !important; }
+    #controls #minimize { right: calc(var(--arc-pip-inset) + var(--arc-pip-button-height) + 8px) !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #controls::before, .control-item { transition: none !important; }
+  }
+  @media (forced-colors: active) {
+    #controls :is(#unpip, #minimize, #close) { background-color: Canvas !important; border: 1px solid ButtonText !important; color: ButtonText !important; }
+  }
+}

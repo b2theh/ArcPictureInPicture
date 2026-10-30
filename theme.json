@@ -1,0 +1,34 @@
+{
+  "id": "arc-picture-in-picture",
+  "author": "b2theh",
+  "name": "Picture in Picture — Arc Style",
+  "description": "Arc-inspired native Picture in Picture with a global automatic mode.",
+  "version": "1.0.0",
+  "createdAt": "2026-10-30",
+  "updatedAt": "2026-10-30T16:31:49Z",
+  "preferences": "preferences.json",
+  "js": true,
+  "scripts": {
+    "pip.uc.js": {
+      "name": "Arc Picture in Picture",
+      "description": "Arc controls and automatic Picture in Picture",
+      "include": [
+        "chrome://browser/content/browser.xhtml",
+        "chrome://global/content/pictureinpicture/player.xhtml"
+      ]
+    }
+  },
+  "style": {
+    "chrome": "chrome.css"
+  },
+  "tags": [
+    "Media",
+    "Arc",
+    "Minimal"
+  ],
+  "fork": [
+    "zen"
+  ],
+  "homepage": "https://github.com/b2theh/ArcPictureInPicture",
+  "readme": "https://github.com/b2theh/ArcPictureInPicture/blob/main/README.md"
+}
