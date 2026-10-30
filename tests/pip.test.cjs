@@ -77,7 +77,7 @@ test('reloading a script does not accumulate observers or lose original values',
   assert.equal(env.values.has(ROOT + 'enable-when-switching-tabs.enabled'), false);
 });
 
-function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
+function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0, hovered = true } = {}) {
   const handlers = new Map();
   const captured = new Set();
   const moves = [];
@@ -85,7 +85,11 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
   const frames = new Map();
   let now = 0;
   let nextTimer = 0;
+  const attributes = new Map();
   const controls = {
+    matches: () => hovered,
+    setAttribute: (name, value) => attributes.set(name, value),
+    removeAttribute: name => attributes.delete(name),
     addEventListener: (n, cb) => handlers.set(n, cb),
     removeEventListener: n => handlers.delete(n),
     setPointerCapture: id => captured.add(id),
@@ -101,7 +105,7 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
     screen: { availLeft: screenLeft, availTop: screenTop, availWidth: 1440, availHeight: 900 },
     addEventListener() {}, removeEventListener() {},
     moveTo(x, y) { moves.push([x, y]); this.screenX = x; this.screenY = y; },
-    setTimeout(cb) { const id = ++nextTimer; timers.set(id, cb); return id; },
+    setTimeout(cb, delay) { const id = ++nextTimer; timers.set(id, { cb, due: now + delay }); return id; },
     clearTimeout(id) { timers.delete(id); },
     performance: { now: () => now },
     matchMedia: () => ({ matches: false }),
@@ -137,7 +141,7 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
   const settle = () => {
     const callbacks = [...timers.values()];
     timers.clear();
-    for (const cb of callbacks) cb();
+    for (const { cb } of callbacks) cb();
   };
   const advance = ms => {
     now += ms;
@@ -145,7 +149,13 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
     frames.clear();
     for (const cb of callbacks) cb(now);
   };
-  return { window, moves, fire, handlers, captured, wheel, settle, timers, frames, advance };
+  const elapse = ms => {
+    now += ms;
+    for (const [id, timer] of [...timers]) {
+      if (timer.due <= now) { timers.delete(id); timer.cb(); }
+    }
+  };
+  return { window, moves, fire, handlers, captured, wheel, settle, timers, frames, advance, elapse, attributes };
 }
 
 test('drag detaches freely and snaps to the bottom right only after release', () => {
@@ -305,6 +315,51 @@ test('flight gently accelerates and decelerates symmetrically without overshoot'
   assert.ok(steps[4] > steps[5] && steps[5] > steps[6] && steps[6] > steps[7]);
   for (let i = 0; i < 4; i++) assert.ok(Math.abs(steps[i] - steps[7 - i]) <= 1);
   assert.ok(positions.every(y => y >= 16 && y <= 659));
+  // More dwell near the endpoints and more travel near the center than
+  // the previous quintic curve (first step ~10px, center steps ~145px).
+  assert.ok(steps[0] < 10);
+  assert.ok(steps[3] > 145);
   assert.deepEqual(p.moves.at(-1), [1024, 16]);
   assert.equal(p.frames.size, 0);
+});
+
+test('controls remain visible for four seconds after leaving and hide only at the deadline', () => {
+  const p = player();
+  p.fire('pointerleave');
+  p.elapse(3999);
+  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
+  p.elapse(1);
+  assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
+  p.fire('pointerenter');
+  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
+  assert.equal(p.timers.size, 0);
+});
+
+test('returning the cursor cancels hiding and the next leave starts a fresh four seconds', () => {
+  const p = player();
+  p.fire('pointerleave');
+  p.elapse(3000);
+  p.fire('pointerenter');
+  p.elapse(2000);
+  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
+  p.fire('pointerleave');
+  p.elapse(3999);
+  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
+  p.elapse(1);
+  assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
+});
+
+test('opening without hover schedules hiding; keyboard focus reveals controls and unload clears the timer', () => {
+  const p = player({ hovered: false });
+  p.elapse(4000);
+  assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
+  p.fire('focusin');
+  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
+  p.elapse(3000);
+  p.fire('keydown');
+  p.elapse(3000);
+  assert.equal(p.attributes.get('arc-pip-ui'), 'visible');
+  p.window.arcPictureInPicture.destroy();
+  assert.equal(p.timers.size, 0);
+  assert.equal(p.attributes.has('arc-pip-ui'), false);
 });

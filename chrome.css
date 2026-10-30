@@ -16,7 +16,11 @@
     /* Script owns dragging, so a held pointer never fights native snapping. */
     -moz-window-dragging: no-drag !important;
     touch-action: none;
+    transition: opacity 180ms ease !important;
   }
+  #controls[arc-pip-ui="visible"] .control-item { opacity: 1 !important; }
+  #controls[arc-pip-ui="hidden"] { opacity: 0 !important; }
+  #controls[arc-pip-ui="hidden"] :is(button, input, .panel) { pointer-events: none !important; }
   #controls-bottom-gradient { -moz-window-dragging: no-drag !important; }
   #controls::before {
     content: "";
@@ -50,7 +54,6 @@
     backdrop-filter: blur(18px) !important;
     transform: none !important;
     scale: none !important;
-    opacity: 1 !important;
     background-image: none !important;
   }
   #controls #unpip {
@@ -259,7 +262,7 @@
     #controls #minimize { right: calc(var(--arc-pip-inset) + var(--arc-pip-button-height) + 8px) !important; }
   }
   @media (prefers-reduced-motion: reduce) {
-    #controls::before, .control-item { transition: none !important; }
+    #controls, #controls::before, .control-item { transition: none !important; }
   }
   @media (forced-colors: active) {
     #controls :is(#unpip, #minimize, #close) { background-color: Canvas !important; border: 1px solid ButtonText !important; color: ButtonText !important; }

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.1
+// @version        1.3.2
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -74,6 +74,7 @@
   function decorate() {
     const controls = document.getElementById("controls");
     if (!controls) return;
+    installControlsVisibility(controls);
     installCornerDrag(controls);
     const labels = { unpip: "Back to Tab", minimize: "Minimize", close: "Close" };
     for (const [id, label] of Object.entries(labels)) {
@@ -105,6 +106,37 @@
       }, 250);
       cleanups.push(() => window.clearInterval(timer));
     }
+  }
+
+  function installControlsVisibility(controls) {
+    let timer = null;
+    let hovered = controls.matches(":hover");
+    function cancel() {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+    }
+    function scheduleHide() {
+      cancel();
+      timer = window.setTimeout(() => {
+        timer = null;
+        controls.setAttribute("arc-pip-ui", "hidden");
+      }, 4000);
+    }
+    function show() {
+      cancel();
+      controls.setAttribute("arc-pip-ui", "visible");
+      if (!hovered) scheduleHide();
+    }
+    const enter = () => { hovered = true; show(); };
+    const leave = () => { hovered = false; scheduleHide(); };
+    const listeners = [["pointerenter", enter], ["pointerleave", leave], ["focusin", show], ["keydown", show]];
+    for (const [type, handler] of listeners) controls.addEventListener(type, handler);
+    show();
+    cleanups.push(() => {
+      cancel();
+      controls.removeAttribute("arc-pip-ui");
+      for (const [type, handler] of listeners) controls.removeEventListener(type, handler);
+    });
   }
 
   function installCornerDrag(controls) {
@@ -154,9 +186,9 @@
       const tick = now => {
         if (unavailable()) { stopFlight(); return; }
         const progress = Math.min(1, Math.max(0, (now - started) / 600));
-        // Smootherstep has zero velocity AND acceleration at both ends:
-        // gently accelerate out of the corner, then settle without a hard stop.
-        const eased = progress ** 3 * (progress * (progress * 6 - 15) + 10);
+        // Seventh-order smoothstep concentrates speed at the midpoint while
+        // keeping velocity, acceleration and jerk zero at both endpoints.
+        const eased = progress ** 4 * (35 + progress * (-84 + progress * (70 - 20 * progress)));
         window.moveTo(Math.round(startX + (x - startX) * eased), Math.round(startY + (y - startY) * eased));
         if (progress < 1) flight.frame = window.requestAnimationFrame(tick);
         else flight = null;
