@@ -13,6 +13,10 @@
   .player-holder { border-radius: 14px !important; }
   #controls {
     overflow: visible !important;
+    display: grid !important;
+    grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+    column-gap: 8px;
+    align-content: start;
     /* Script owns dragging, so a held pointer never fights native snapping. */
     -moz-window-dragging: no-drag !important;
     touch-action: none;
@@ -38,9 +42,18 @@
   #controls[arc-pip-ui]::before { opacity: 1; transition: none; }
 
   #controls :is(#unpip, #minimize, #close) {
-    position: absolute !important;
-    top: var(--arc-pip-inset) !important;
+    position: relative !important;
+    grid-row: 1;
+    align-self: start;
+    margin: var(--arc-pip-inset) 0 0 !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
     bottom: auto !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
     height: var(--arc-pip-button-height) !important;
     width: auto !important;
     max-width: none !important;
@@ -60,17 +73,34 @@
     background-image: none !important;
   }
   #controls #unpip {
-    left: var(--arc-pip-inset) !important;
-    right: auto !important;
+    grid-column: 1;
+    margin-left: var(--arc-pip-inset) !important;
   }
   #controls #close {
-    right: var(--arc-pip-inset) !important;
-    left: auto !important;
+    grid-column: 4;
+    margin-right: var(--arc-pip-inset) !important;
   }
   #controls #minimize {
-    right: calc(var(--arc-pip-inset) + clamp(88px, 8vw, 109px)) !important;
-    left: auto !important;
+    grid-column: 3;
   }
+  /* Native tooltips use relative positioning and floats, which expand an
+     auto-width button on hover. Keep them entirely outside layout. */
+  #controls :is(#unpip, #minimize, #close)::after {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: 0 !important;
+    float: none !important;
+    transform: none !important;
+    translate: none !important;
+    scale: none !important;
+    margin: 0 !important;
+    z-index: 10;
+    font: 500 12px/1.4 system-ui, sans-serif;
+    pointer-events: none;
+  }
+  #controls #unpip::after { left: 0 !important; right: auto !important; }
   /* PiP's chrome-only CSP rejects data: SVG backgrounds. Draw these icons
      with CSS instead, including Close for a consistent stroke weight. */
   #controls :is(#unpip, #minimize, #close)::before {
@@ -104,10 +134,12 @@
   #controls :is(#unpip, #minimize, #close):active { background-color: #ffffff40 !important; }
   .arc-pip-label { pointer-events: none !important; white-space: nowrap; }
   #arc-pip-domain {
-    position: absolute;
+    position: relative;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
     top: var(--arc-pip-inset);
-    left: 30%;
-    width: 40%;
+    min-width: 0;
     line-height: var(--arc-pip-button-height);
     text-align: center;
     font-size: clamp(12px, 1.5vw, 18px);
@@ -262,7 +294,6 @@
     }
     .arc-pip-label { display: none !important; }
     #controls :is(#unpip, #minimize, #close)::before { left: calc(50% - 7px); }
-    #controls #minimize { right: calc(var(--arc-pip-inset) + var(--arc-pip-button-height) + 8px) !important; }
   }
   @media (prefers-reduced-motion: reduce) {
     #controls, #controls::before, .control-item { transition: none !important; }
