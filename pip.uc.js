@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.1.0
+// @version        1.2.0
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -38,6 +38,8 @@
         "media.videocontrols.picture-in-picture.enabled",
         "media.videocontrols.picture-in-picture.enable-when-switching-tabs.enabled",
         "media.videocontrols.picture-in-picture.enable-when-occluded.enabled",
+        "media.videocontrols.picture-in-picture.playback-speed.enabled",
+        "media.videocontrols.picture-in-picture.improved-video-controls.enabled",
       ];
       const saved = native.map(name => ({
         name, hasUser: prefs.prefHasUserValue(name), value: prefs.getBoolPref(name, false),
@@ -46,7 +48,7 @@
         owners: new Set(),
         observe() {
           const enabled = prefs.getBoolPref(auto, false);
-          native.forEach((name, i) => prefs.setBoolPref(name, i === 0 || enabled));
+          native.forEach((name, i) => prefs.setBoolPref(name, (i === 1 || i === 2) ? enabled : true));
         },
         release(owner) {
           state.owners.delete(owner);
@@ -109,6 +111,8 @@
     const GAP = 16;
     const RADIUS = 80;
     let drag = null;
+    let wheelTimer = null;
+    let wheelPosition = null;
     const unavailable = () => window.fullScreen || document.fullscreenElement || window.windowState === 2;
     const snap = () => {
       if (unavailable()) return;
@@ -127,6 +131,7 @@
     };
     const down = event => {
       if (event.button !== 0 || unavailable() || drag) return;
+      cancelWheel();
       if (event.target.closest("button, input, a, .panel, #timestamp")) return;
       drag = {
         id: event.pointerId, x: event.screenX, y: event.screenY,
@@ -152,12 +157,50 @@
       if (controls.hasPointerCapture(id)) controls.releasePointerCapture(id);
       if (moved && event.type === "pointerup") snap();
     };
+    function cancelWheel() {
+      if (wheelTimer !== null) window.clearTimeout(wheelTimer);
+      wheelTimer = null;
+      wheelPosition = null;
+    }
+    const wheel = event => {
+      if (drag || unavailable() || event.ctrlKey || event.metaKey || event.altKey) return;
+      // Sliders and the open speed menu keep their own scrolling behavior.
+      if (event.target.closest("input, .panel")) return;
+      const scaleX = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerWidth : 1;
+      const scaleY = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+      const dx = event.deltaX * scaleX;
+      const dy = event.deltaY * scaleY;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy) || (!dx && !dy)) return;
+      const { availLeft: left, availTop: top, availWidth: width, availHeight: height } = window.screen;
+      // Keep swipe movement within the current display's usable area.
+      if (![left, top, width, height].every(Number.isFinite)) return;
+      const xMax = left + Math.max(0, width - window.outerWidth);
+      const yMax = top + Math.max(0, height - window.outerHeight);
+      wheelPosition ??= { x: window.screenX, y: window.screenY };
+      // Follow the content direction selected by macOS (including Natural scrolling).
+      // Preserve fractional deltas so slow Magic Mouse swipes still move the window.
+      wheelPosition.x = Math.max(left, Math.min(xMax, wheelPosition.x - dx));
+      wheelPosition.y = Math.max(top, Math.min(yMax, wheelPosition.y - dy));
+      window.moveTo(Math.round(wheelPosition.x), Math.round(wheelPosition.y));
+      event.preventDefault();
+      event.stopPropagation();
+      if (wheelTimer !== null) window.clearTimeout(wheelTimer);
+      // Each momentum event extends the gesture; snap only once it settles.
+      wheelTimer = window.setTimeout(() => {
+        wheelTimer = null;
+        wheelPosition = null;
+        snap();
+      }, 220);
+    };
     const listeners = [
       ["pointerdown", down], ["pointermove", move],
       ["pointerup", finish], ["pointercancel", finish], ["lostpointercapture", finish],
     ];
     for (const [type, listener] of listeners) controls.addEventListener(type, listener);
+    controls.addEventListener("wheel", wheel, { passive: false });
     cleanups.push(() => {
+      cancelWheel();
+      controls.removeEventListener("wheel", wheel);
       for (const [type, listener] of listeners) controls.removeEventListener(type, listener);
       if (drag && controls.hasPointerCapture(drag.id)) controls.releasePointerCapture(drag.id);
       drag = null;

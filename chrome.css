@@ -166,7 +166,30 @@
   }
   /* Center relative to the full overlay, not the lower utility row. */
   .start-controls { position: absolute; left: var(--arc-pip-inset); bottom: calc(var(--arc-pip-inset) + 28px); }
-  .end-controls { position: absolute; right: var(--arc-pip-inset); bottom: calc(var(--arc-pip-inset) + 28px); }
+  .end-controls {
+    position: absolute;
+    right: var(--arc-pip-inset);
+    bottom: calc(var(--arc-pip-inset) + 28px);
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  #closed-caption, #settings { display: none !important; }
+  #controls #playbackRate {
+    display: block !important;
+    width: 52px !important;
+    max-width: none !important;
+    height: 32px !important;
+    border-radius: 8px !important;
+    background: #ffffff18 !important;
+    color: white !important;
+  }
+  #playbackRate::before {
+    content: "Speed";
+    font: 600 11px/1 system-ui, sans-serif;
+    pointer-events: none;
+  }
+  #controls #playbackRate:hover { background: #ffffff30 !important; }
   #controls-bottom-gradient { height: 24% !important; }
 
   @media (width < 650px) {

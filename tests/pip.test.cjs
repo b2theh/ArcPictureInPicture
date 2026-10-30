@@ -38,6 +38,8 @@ test('manual mode enables the native video menu and disables both automatic trig
   assert.equal(env.values.get(ROOT + 'enabled'), true);
   assert.equal(env.values.get(ROOT + 'enable-when-switching-tabs.enabled'), false);
   assert.equal(env.values.get(ROOT + 'enable-when-occluded.enabled'), false);
+  assert.equal(env.values.get(ROOT + 'playback-speed.enabled'), true);
+  assert.equal(env.values.get(ROOT + 'improved-video-controls.enabled'), true);
   env.prefs.setBoolPref(AUTO, true);
   assert.equal(env.values.get(ROOT + 'enable-when-switching-tabs.enabled'), true);
   assert.equal(env.values.get(ROOT + 'enable-when-occluded.enabled'), true);
@@ -45,11 +47,15 @@ test('manual mode enables the native video menu and disables both automatic trig
   assert.equal(env.values.get(ROOT + 'enable-when-switching-tabs.enabled'), false);
   win.close();
   assert.equal(env.values.has(ROOT + 'enabled'), false);
+  assert.equal(env.values.has(ROOT + 'playback-speed.enabled'), false);
   assert.equal(env.observers.size, 0);
 });
 
 test('multiple windows retain overrides until the last owner leaves, then restore exact user preferences', () => {
-  const initial = { [AUTO]: true, [ROOT + 'enabled']: false, [ROOT + 'enable-when-occluded.enabled']: true };
+  const initial = {
+    [AUTO]: true, [ROOT + 'enabled']: false, [ROOT + 'enable-when-occluded.enabled']: true,
+    [ROOT + 'playback-speed.enabled']: false, [ROOT + 'improved-video-controls.enabled']: false,
+  };
   const env = environment(initial);
   const a = env.open();
   const b = env.open();
@@ -75,6 +81,8 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
   const handlers = new Map();
   const captured = new Set();
   const moves = [];
+  const timers = new Map();
+  let nextTimer = 0;
   const controls = {
     addEventListener: (n, cb) => handlers.set(n, cb),
     removeEventListener: n => handlers.delete(n),
@@ -87,9 +95,12 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
   elements.set('controls', controls);
   const window = {
     screenX: left, screenY: top, outerWidth: 400, outerHeight: 225,
+    innerWidth: 400, innerHeight: 225,
     screen: { availLeft: screenLeft, availTop: screenTop, availWidth: 1440, availHeight: 900 },
     addEventListener() {}, removeEventListener() {},
     moveTo(x, y) { moves.push([x, y]); this.screenX = x; this.screenY = y; },
+    setTimeout(cb) { const id = ++nextTimer; timers.set(id, cb); return id; },
+    clearTimeout(id) { timers.delete(id); },
   };
   const document = {
     readyState: 'complete',
@@ -107,7 +118,22 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0 } = {}) {
     type, button: 0, pointerId: 1, screenX: x, screenY: y,
     target: { closest: () => interactive }, preventDefault() {},
   });
-  return { window, moves, fire, handlers, captured };
+  const wheel = (dx, dy, options = {}) => {
+    const event = {
+      deltaX: dx, deltaY: dy, deltaMode: 0,
+      target: { closest: () => false },
+      preventDefault() { this.prevented = true; }, stopPropagation() {},
+      ...options,
+    };
+    handlers.get('wheel')?.(event);
+    return event;
+  };
+  const settle = () => {
+    const callbacks = [...timers.values()];
+    timers.clear();
+    for (const cb of callbacks) cb();
+  };
+  return { window, moves, fire, handlers, captured, wheel, settle, timers };
 }
 
 test('drag detaches freely and snaps to the bottom right only after release', () => {
@@ -158,4 +184,57 @@ test('buttons, fullscreen and a cancelled gesture never snap; unload releases ca
   p.window.arcPictureInPicture.destroy();
   assert.equal(p.handlers.size, 0);
   assert.equal(p.captured.size, 0);
+});
+
+test('Magic Mouse swipes move both axes and retain small fractional deltas', () => {
+  const p = player();
+  assert.equal(p.wheel(20, -30).prevented, true);
+  assert.deepEqual(p.moves.at(-1), [480, 330]);
+  for (let i = 0; i < 10; i++) p.wheel(0.2, 0.2);
+  assert.deepEqual(p.moves.at(-1), [478, 328]);
+  assert.equal(p.timers.size, 1);
+});
+
+test('swipe momentum delays corner snapping until the gesture settles', () => {
+  const p = player();
+  p.wheel(-500, -350);
+  assert.deepEqual(p.moves, [[1000, 650]]);
+  p.wheel(-5, -2);
+  assert.deepEqual(p.moves.at(-1), [1005, 652]);
+  assert.equal(p.timers.size, 1);
+  p.settle();
+  assert.deepEqual(p.moves.at(-1), [1024, 659]);
+});
+
+test('wheel units are normalized and swipes cannot push PiP out of the work area', () => {
+  const p = player();
+  p.wheel(1, -1, { deltaMode: 1 });
+  assert.deepEqual(p.moves.at(-1), [484, 316]);
+  p.wheel(1, 1, { deltaMode: 2 });
+  assert.deepEqual(p.moves.at(-1), [84, 91]);
+  p.wheel(10000, -10000);
+  assert.deepEqual(p.moves.at(-1), [0, 675]);
+});
+
+test('speed menu, sliders, modifier gestures and fullscreen do not move the window', () => {
+  const p = player();
+  for (const modifier of ['ctrlKey', 'metaKey', 'altKey']) p.wheel(20, 20, { [modifier]: true });
+  p.wheel(20, 20, { target: { closest: () => true } });
+  p.window.fullScreen = true;
+  p.wheel(20, 20);
+  assert.equal(p.moves.length, 0);
+});
+
+test('starting a held drag cancels a pending swipe snap; unloading cancels timers', () => {
+  const p = player();
+  p.wheel(-500, -350);
+  p.fire('pointerdown', 0, 0);
+  p.settle();
+  assert.deepEqual(p.moves, [[1000, 650]]);
+  p.wheel(-20, -20);
+  assert.equal(p.moves.length, 1);
+  p.fire('pointercancel', 0, 0);
+  p.wheel(10, 10);
+  p.window.arcPictureInPicture.destroy();
+  assert.equal(p.timers.size, 0);
 });
