@@ -99,6 +99,11 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0, hovered 
   };
   const elements = new Map(['unpip', 'minimize', 'close'].map(id => [id, { appendChild() {} }]));
   elements.set('controls', controls);
+  const speedAttributes = new Map();
+  const slider = { id: 'playback-rate-slider', blur() { this.blurred = true; } };
+  const speedPanel = { classList: new Set(), contains: element => element === slider };
+  elements.set('playbackRateSettings', speedPanel);
+  elements.set('playbackRate', { setAttribute: (name, value) => speedAttributes.set(name, value) });
   const window = {
     screenX: left, screenY: top, outerWidth: 400, outerHeight: 225,
     innerWidth: 400, innerHeight: 225,
@@ -155,7 +160,7 @@ function player({ left = 500, top = 300, screenLeft = 0, screenTop = 0, hovered 
       if (timer.due <= now) { timers.delete(id); timer.cb(); }
     }
   };
-  return { window, moves, fire, handlers, captured, wheel, settle, timers, frames, advance, elapse, attributes };
+  return { window, moves, fire, handlers, captured, wheel, settle, timers, frames, advance, elapse, attributes, speedPanel, speedAttributes, slider, document };
 }
 
 test('drag detaches freely and snaps to the bottom right only after release', () => {
@@ -389,4 +394,28 @@ test('opening without hover schedules hiding; keyboard focus reveals controls an
   p.window.arcPictureInPicture.destroy();
   assert.equal(p.timers.size, 0);
   assert.equal(p.attributes.has('arc-pip-ui'), false);
+});
+
+test('choosing a speed preset closes the popup and releases its sticky visibility state', () => {
+  const p = player();
+  p.attributes.set('donthide', 'true');
+  p.handlers.get('click')({ target: { closest: selector => selector === '.playback-rate-preset' } });
+  assert.equal(p.speedPanel.classList.has('hide'), true);
+  assert.equal(p.speedAttributes.get('aria-expanded'), 'false');
+  assert.equal(p.attributes.has('donthide'), false);
+  p.fire('pointerleave');
+  assert.equal(p.attributes.get('arc-pip-ui'), 'hidden');
+});
+
+test('speed slider stays available during input but closes on a committed change and clears focus', () => {
+  const p = player();
+  p.document.activeElement = p.slider;
+  p.attributes.set('donthide', 'true');
+  p.handlers.get('change')({ target: { id: 'audio-scrubber' } });
+  assert.equal(p.speedPanel.classList.has('hide'), false);
+  assert.equal(p.attributes.has('donthide'), true);
+  p.handlers.get('change')({ target: p.slider });
+  assert.equal(p.speedPanel.classList.has('hide'), true);
+  assert.equal(p.slider.blurred, true);
+  assert.equal(p.attributes.has('donthide'), false);
 });

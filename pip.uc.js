@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           Arc Picture in Picture
-// @version        1.3.11
+// @version        1.3.12
 // @description    Arc-inspired controls for Zen's native video player.
 // @include        chrome://browser/content/browser.xhtml
 // @include        chrome://global/content/pictureinpicture/player.xhtml
@@ -76,6 +76,7 @@
     if (!controls) return;
     installControlsVisibility(controls);
     installCornerDrag(controls);
+    installSpeedDismissal(controls);
     const labels = { unpip: "Back to Tab", minimize: "Minimize", close: "Close" };
     for (const [id, label] of Object.entries(labels)) {
       const button = document.getElementById(id);
@@ -106,6 +107,34 @@
       }, 250);
       cleanups.push(() => window.clearInterval(timer));
     }
+  }
+
+  function installSpeedDismissal(controls) {
+    const panel = document.getElementById("playbackRateSettings");
+    const button = document.getElementById("playbackRate");
+    if (!panel || !button) return;
+    const dismiss = () => {
+      // Native listeners apply the rate at the target first; we only close
+      // the popup and release its keep-visible state when the choice commits.
+      panel.classList.add("hide");
+      button.setAttribute("aria-expanded", "false");
+      controls.removeAttribute("donthide");
+      const focused = document.activeElement;
+      if (focused && (focused === button || panel.contains(focused))) focused.blur();
+    };
+    const click = event => {
+      if (event.target.closest(".playback-rate-preset")) dismiss();
+    };
+    const change = event => {
+      if (event.target.id === "playback-rate-slider") dismiss();
+    };
+    controls.addEventListener("click", click);
+    controls.addEventListener("change", change);
+    cleanups.push(() => {
+      controls.removeEventListener("click", click);
+      controls.removeEventListener("change", change);
+      dismiss();
+    });
   }
 
   function installControlsVisibility(controls) {
